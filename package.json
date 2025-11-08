@@ -1,0 +1,15 @@
+{
+  "name": "ntt-monorepo",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "build": "npm run -w apps/web build && npm run -w apps/api build",
+    "dev": "npm run -w apps/api start:dev",
+    "format": "prettier --write .",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0"
+  }
+}
