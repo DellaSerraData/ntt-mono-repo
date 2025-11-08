@@ -2,38 +2,31 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
+import { json, urlencoded } from 'express';
 import { ValidationPipe } from '@nestjs/common';
-
-// Request-Id simples
-import { randomUUID } from 'crypto';
-import type { Request, Response, NextFunction } from 'express';
-
-function requestIdMiddleware(req: Request, _res: Response, next: NextFunction) {
-  (req as any).requestId = (req.headers['x-request-id'] as string) || randomUUID();
-  next();
-}
+import { buildCorsOptions } from './cors.config';
+import { ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    // logger: ['error','warn','log'] // ajuste se quiser menos ruído
-  });
+  const app = await NestFactory.create(AppModule);
 
+  // Prefixo e validação
   app.setGlobalPrefix('api');
-  app.use(helmet());
-  app.use(requestIdMiddleware);
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,       // remove campos desconhecidos
-    transform: true,       // transforma tipos (DTOs)
-    forbidNonWhitelisted: false
-  }));
+  // Segurança de headers
+  app.use(helmet({ xPoweredBy: false, crossOriginOpenerPolicy: { policy: 'same-origin' } }));
 
-  app.enableCors({
-    origin: process.env.WEB_ORIGIN, // ex.: https://seu-web.vercel.app
-    credentials: true,
-    methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-    allowedHeaders: ['Content-Type','Authorization','X-Requested-With','X-Request-Id']
-  });
+  // Limites de payload (ajuste se necessário)
+  app.use(json({ limit: '1mb' }));
+  app.use(urlencoded({ limit: '1mb', extended: true }));
+
+  // CORS dinâmico (prod + previews)
+  app.enableCors(buildCorsOptions());
+
+  // Guard global de rate limit (config no AppModule)
+  app.useGlobalGuards(new ThrottlerGuard());
 
   await app.listen(process.env.PORT ?? 3000);
 }
