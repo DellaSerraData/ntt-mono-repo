@@ -1,26 +1,31 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+// apps/api/src/prisma.service.ts
+import { INestApplication, Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+// Se estiver usando Prisma Accelerate:
 import { withAccelerate } from '@prisma/extension-accelerate';
 
+let prismaGlobal: PrismaClient;
+
 @Injectable()
-export class PrismaService implements OnModuleInit, OnModuleDestroy {
-  // Note: `client` is public to allow access from other services.
-  public client: ReturnType<typeof this.createAcceleratedClient>;
-
+export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor() {
-    this.client = this.createAcceleratedClient();
-  }
-
-  private createAcceleratedClient() {
-    return new PrismaClient().$extends(withAccelerate());
+    // Singleton para ambientes serverless
+    if (!prismaGlobal) {
+      const base = new PrismaClient();
+      prismaGlobal = (base as any).$extends?.(withAccelerate?.()) ?? base;
+    }
+    super();
+    Object.assign(this, prismaGlobal);
   }
 
   async onModuleInit() {
-    await this.client.$connect();
+    await this.$connect();
   }
 
-  async onModuleDestroy() {
-    await this.client.$disconnect();
+  async enableShutdownHooks(app: INestApplication) {
+    (this as any).$on('beforeExit', async () => {
+      await app.close();
+    });
   }
 }
 
